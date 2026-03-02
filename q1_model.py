@@ -658,14 +658,34 @@ class SpendingRatioPredictor:
         MORTGAGE_FLAG:    int,
         HAS_MORTGAGE:     int,
         NUM_CARS:         int,
-    ) -> float:
+        annual_income:    Optional[float] = None,
+    ) -> dict:
         """
-        Predict spend ratio for a single household using the active model.
-        Returns a float — e.g. 0.72 means the household spends 72% of its income.
-        Values above 1.0 indicate dis-saving.
+        Predict disposable income for a single household.
 
-        The active model defaults to the best tuned model after training.
-        Use swap_model(name) to change it.
+        The model internally predicts spend_ratio, but that is an intermediate
+        result. The final output of interest is:
+
+            disposable_income = annual_income * (1 - spend_ratio)
+
+        Parameters
+        ----------
+        LOG_INCOME, INCOME_X_SIZE, LOG_INCOME_X_CAR : float
+            Income-derived features. Use build_features() to compute these
+            automatically from a plain annual_income figure.
+        CUTENURE, IS_OWNER, MORTGAGE_FLAG, HAS_MORTGAGE, NUM_CARS : int
+            Demographic / tenure features.
+        annual_income : float, optional
+            The household's actual annual income in $. If provided, disposable
+            income is computed directly. If omitted, it is back-calculated from
+            LOG_INCOME via exp(LOG_INCOME) - 1.
+
+        Returns
+        -------
+        dict with keys:
+            spend_ratio       — predicted fraction of income spent (e.g. 0.72)
+            annual_income     — income used for the disposable income calculation
+            disposable_income — annual_income * (1 - spend_ratio)
         """
         self._require("_active_model")
         feats_in = {
@@ -675,20 +695,51 @@ class SpendingRatioPredictor:
             "HAS_MORTGAGE": HAS_MORTGAGE, "NUM_CARS": NUM_CARS,
         }
         row = np.array([[feats_in.get(f, 0.0) for f in self._active_feats]], dtype=float)
-        return float(self._active_model.predict(row)[0])
+        spend_ratio = float(self._active_model.predict(row)[0])
 
-    def predict_df(self, df: pd.DataFrame) -> pd.Series:
+        # Recover income from LOG_INCOME if not explicitly supplied
+        income = annual_income if annual_income is not None else float(np.expm1(LOG_INCOME))
+
+        disposable = income * (1.0 - spend_ratio)
+
+        return {
+            "spend_ratio":       round(spend_ratio, 4),
+            "annual_income":     round(income, 2),
+            "disposable_income": round(disposable, 2),
+        }
+
+    def predict_df(self, df: pd.DataFrame, income_col: Optional[str] = None) -> pd.DataFrame:
         """
-        Predict spend ratios for a DataFrame of households.
+        Predict disposable income for a DataFrame of households.
+
         The DataFrame must contain columns matching the active model's feature list.
-        Returns a pd.Series of predicted ratios aligned to df's index.
+        Returns a DataFrame with three new columns:
+            spend_ratio, annual_income, disposable_income
+
+        Parameters
+        ----------
+        df         : DataFrame containing the 8 feature columns.
+        income_col : Optional column name in df holding actual annual income.
+                     If omitted, income is back-calculated from LOG_INCOME.
         """
         self._require("_active_model")
         missing = [f for f in self._active_feats if f not in df.columns]
         if missing:
             raise ValueError(f"DataFrame missing columns: {missing}")
+
         X = df[self._active_feats].values.astype(float)
-        return pd.Series(self._active_model.predict(X), index=df.index, name="PRED_SPEND_RATIO")
+        spend_ratios = self._active_model.predict(X)
+
+        if income_col and income_col in df.columns:
+            incomes = df[income_col].values.astype(float)
+        else:
+            incomes = np.expm1(df["LOG_INCOME"].values.astype(float))
+
+        return pd.DataFrame({
+            "spend_ratio":       spend_ratios.round(4),
+            "annual_income":     incomes.round(2),
+            "disposable_income": (incomes * (1.0 - spend_ratios)).round(2),
+        }, index=df.index)
 
     def swap_model(self, name: str) -> "SpendingRatioPredictor":
         """
@@ -827,10 +878,14 @@ if __name__ == "__main__":
         annual_income=95_000, household_size=3, num_cars=2,
         cutenure=SpendingRatioPredictor.encode_tenure("own_mortgage"),
     )
-    print(f"\n  Best tuned model  : {p.predict(**feats):.3f}")
+    result = p.predict(**feats, annual_income=95_000)
+    print(f"\n  Spend ratio      : {result['spend_ratio']:.4f}")
+    print(f"  Annual income    : ${result['annual_income']:,.0f}")
+    print(f"  Disposable income: ${result['disposable_income']:,.0f}")
 
     # Compare the same inputs across all trained models
     print("\n  Cross-model comparison:")
     for name in p.trained_models:
         p.swap_model(name)
-        print(f"    {name:<30} → {p.predict(**feats):.3f}")
+        r = p.predict(**feats, annual_income=95_000)
+        print(f"    {name:<30} spend_ratio={r['spend_ratio']:.4f}  disposable=${r['disposable_income']:,.0f}")

@@ -8,7 +8,7 @@ Total rows loaded: 20,158
   ✓ Income column(s) found: ['FINCBTXM', 'FINATXEM']
 Unique households: 11,311
 
-── Demographic Snapshot ──────────────────────────────────────────────
+── Demographic Snapshot ───────────────────────────────────────────
   Median age            : 53
   Mean household size   : 2.41
   Homeownership rate    : 64.6%
@@ -20,7 +20,6 @@ Unique households: 11,311
   Column                          ρ      |ρ|     Eta²       N
   --------------------------------------------------------------
   LOG_INCOME               -0.2411↓   0.2411    0.0984  11,311
-  INCOME_ANNUAL            -0.2411↓   0.2411    0.0984  11,311
   INCOME_X_SIZE            -0.2129↓   0.2129    0.0906  11,311
   LOG_INCOME_X_CAR         -0.1234↓   0.1234    0.0215  11,311
   CUTENURE                 +0.0981↑   0.0981    0.0026  11,311
@@ -43,7 +42,7 @@ Unique households: 11,311
   FINLWT21                 -0.0151↓   0.0151    0.0013  11,311
   REGION                   +0.0072↑   0.0072    0.0006  11,017
 
-── Building Model Roster ────────────────────────────────────────────
+── Feature Count Scan (RF CV R²) ────────────────────────────────────
     n= 1  R2=0.1011  [LOG_INCOME]
     n= 2  R2=0.1726  [LOG_INCOME, INCOME_X_SIZE]
     n= 3  R2=0.2800  [LOG_INCOME, INCOME_X_SIZE, LOG_INCOME_X_CAR]
@@ -67,7 +66,10 @@ Unique households: 11,311
     n=21  R2=-0.0485  [LOG_INCOME, INCOME_X_SIZE, LOG_INCOME_X_CAR, CUTENURE, IS_OWNER, MORTGAGE_FLAG, HAS_MORTGAGE, NUM_CARS, VEHQ, EDUCA2, MARITAL1, FAM_SIZE, NUM_RESIDENTS, HAS_CAR, OWNER_X_AGE, SEX_REF, CARS_PER_PERSON, AGE_SQUARED, AGE_REF, BLS_URBN, FINLWT21]
     n=22  R2=0.0496  [LOG_INCOME, INCOME_X_SIZE, LOG_INCOME_X_CAR, CUTENURE, IS_OWNER, MORTGAGE_FLAG, HAS_MORTGAGE, NUM_CARS, VEHQ, EDUCA2, MARITAL1, FAM_SIZE, NUM_RESIDENTS, HAS_CAR, OWNER_X_AGE, SEX_REF, CARS_PER_PERSON, AGE_SQUARED, AGE_REF, BLS_URBN, FINLWT21, REGION]
 
-  Optimal: 8 features → ['LOG_INCOME', 'INCOME_X_SIZE', 'LOG_INCOME_X_CAR', 'CUTENURE', 'IS_OWNER', 'MORTGAGE_FLAG', 'HAS_MORTGAGE', 'NUM_CARS']  CV R2=0.3016
+  Optimal: 8 features → ['LOG_INCOME', 'INCOME_X_SIZE', 'LOG_INCOME_X_CAR', 'CUTENURE', 'IS_OWNER', 'MORTGAGE_FLAG', 'HAS_MORTGAGE', 'NUM_CARS']  CV R²=0.3016
+
+── Model Comparison ─────────────────────────────────────────────────
+  Features: ['LOG_INCOME', 'INCOME_X_SIZE', 'LOG_INCOME_X_CAR', 'CUTENURE', 'IS_OWNER', 'MORTGAGE_FLAG', 'HAS_MORTGAGE', 'NUM_CARS']
 
   Model                        R2     std       RMSE
   ----------------------------------------------------
@@ -78,26 +80,65 @@ Unique households: 11,311
   Gradient Boosting        0.2031  0.1618     0.1077
   XGBoost                  0.1848  0.1143     0.1104
 
-── Tuning hyperparameters for best model: Random Forest ──────────────
-  Tuned R2: 0.3498  params: {'n_estimators': 500, 'min_samples_leaf': 5, 'max_features': 'sqrt', 'max_depth': 8}
+  Best model: Random Forest  R²=0.3159
 
-  Best model: Random Forest  R2=0.3159
+── Tuning: Random Forest ────────────────────────────────────────────────────
+  Tuned R²: 0.3498  params: {'n_estimators': 500, 'min_samples_leaf': 5, 'max_features': 'sqrt', 'max_depth': 8}
 
-── Two-Stage Model: Stage1=Income, Stage2=Spending|Income ──────────
-  Stage 1  Predict log(income)  CV R2 = 0.2493 ± 0.0250
-  Stage 2  Predict spend ratio  CV R2 = -0.5268 ± 0.5340
-
-  Two-stage R2 vs single-stage baseline: -0.5268 vs 0.2031  (↓ no gain — income proxy is the bottleneck)
-  ✓ Saved: cex_2020_upgraded_overview.png
+── Two-Stage Model ──────────────────────────────────────────────────
+  Stage 1  Predict log(income)  CV R² = 0.2493 ± 0.0250
+  Stage 2  Predict spend ratio  CV R² = -0.5268 ± 0.5340
+  Two-stage vs single-stage: -0.5268 vs 0.2031  (↓ no gain vs single-stage)
+  ✓ Saved: cex_2020_results.png
 
 =================================================================
-  UPGRADE SUMMARY
+  EXPERIMENT SUMMARY
 =================================================================
-  Income source       : Actual FMLI income
-  Primary target      : SPEND_RATIO (spending / income)
-  Features used       : 8  →  ['LOG_INCOME', 'INCOME_X_SIZE', 'LOG_INCOME_X_CAR', 'CUTENURE', 'IS_OWNER', 'MORTGAGE_FLAG', 'HAS_MORTGAGE', 'NUM_CARS']
-  Best single model   : Random Forest  R2=0.3159
-  Two-stage S2 R2     : -0.5268
-  Stage 1 income R2   : 0.2493
+  Optimal features (8): ['LOG_INCOME', 'INCOME_X_SIZE', 'LOG_INCOME_X_CAR', 'CUTENURE', 'IS_OWNER', 'MORTGAGE_FLAG', 'HAS_MORTGAGE', 'NUM_CARS']
+
+  Model                             CV R²     std
+  ------------------------------------------------
+  Random Forest (tuned)            0.3498  0.0000  ◀ active
+  Random Forest                    0.3159  0.1084
+  Gradient Boosting                0.2031  0.1618
+  XGBoost                          0.1848  0.1143
+  Ridge Regression                 0.1380  0.0177
+  Linear Regression                0.1379  0.0181
+  ElasticNet                       0.1338  0.0117
+  two_stage                       -0.5268  0.5340
+
+  Two-stage  Stage1 R²=0.2493  Stage2 R²=-0.5268
+
+  Feature importances (Random Forest (tuned)):
+    LOG_INCOME                0.4604  ██████████████████
+    INCOME_X_SIZE             0.3872  ███████████████
+    LOG_INCOME_X_CAR          0.1027  ████
+    NUM_CARS                  0.0267  █
+    CUTENURE                  0.0111  
+    IS_OWNER                  0.0062  
+    HAS_MORTGAGE              0.0031  
+    MORTGAGE_FLAG             0.0026  
 =================================================================
-  ✓ Saved: variable_importance_ratio.csv
+  ✓ Saved → spend_ratio_model.pkl
+
+  Spend ratio      : 0.0542
+  Annual income    : $95,000
+  Disposable income: $89,853
+
+  Cross-model comparison:
+  Active model → 'Linear Regression'
+    Linear Regression              spend_ratio=0.0966  disposable=$85,825
+  Active model → 'Ridge Regression'
+    Ridge Regression               spend_ratio=0.0964  disposable=$85,839
+  Active model → 'ElasticNet'
+    ElasticNet                     spend_ratio=0.0745  disposable=$87,922
+  Active model → 'Random Forest'
+    Random Forest                  spend_ratio=0.0531  disposable=$89,958
+  Active model → 'Gradient Boosting'
+    Gradient Boosting              spend_ratio=0.0547  disposable=$89,801
+  Active model → 'XGBoost'
+    XGBoost                        spend_ratio=0.0529  disposable=$89,974
+  Active model → 'Random Forest (tuned)'
+    Random Forest (tuned)          spend_ratio=0.0542  disposable=$89,853
+  Active model → 'two_stage'
+    two_stage                      spend_ratio=1.9268  disposable=$-88,049
