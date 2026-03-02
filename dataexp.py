@@ -1,5 +1,9 @@
 import pandas as pd
-df = pd.read_excel("M3-Challenge-Problem-Data-2026.xlsx", sheet_name=1)
+import matplotlib.pyplot as plt
 
-print(df)
+file_path = "q1traindata.csv"
+
+# ========================================================== Q1 EDA:
+# we must predict disposable income based on everything that relates to a person's social economic status without the need for gambling at the moment.
+# disposable income is defined as gross income (mean if it varies) - essential expenses
 
