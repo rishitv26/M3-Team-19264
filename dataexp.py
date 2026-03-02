@@ -335,36 +335,35 @@ s1_df     = s1_df[s1_df["INCOME_ANNUAL"] > 500]
 X_s1      = s1_df[s1_feats].values
 y_s1      = np.log1p(s1_df["INCOME_ANNUAL"].values)
 
-s1_model  = GradientBoostingRegressor(n_estimators=300, max_depth=4, learning_rate=0.05, random_state=42)
-s1_r2     = cross_val_score(s1_model, X_s1, y_s1, cv=kf, scoring="r2")
+s1_model = GradientBoostingRegressor(n_estimators=300, max_depth=4, learning_rate=0.05, random_state=42)
+s1_r2    = cross_val_score(s1_model, X_s1, y_s1, cv=kf, scoring="r2")
 print(f"  Stage 1  Predict log(income)  CV R2 = {s1_r2.mean():.4f} ± {s1_r2.std():.4f}")
 s1_model.fit(X_s1, y_s1)
-s1_df["PRED_LOG_INC"] = s1_model.predict(X_s1)
-s1_df["PRED_INCOME"]  = np.expm1(s1_df["PRED_LOG_INC"])
 
-# Stage 2: predict spend ratio using predicted income (no leakage of actual income)
-stage2_extra = ["PRED_LOG_INC", "PRED_INCOME"]
-s2_df = hh[s1_feats + ["TOTEXPCQ", "SPEND_RATIO"]].replace([np.inf,-np.inf], np.nan).dropna()
-s2_df = s2_df[s2_df["SPEND_RATIO"] > 0]
+# Attach predicted income directly via the s1_df index (no merge needed)
+# s1_df was filtered from hh, so its index IS the hh index — use .loc directly
+hh["PRED_LOG_INC"] = np.nan
+hh.loc[s1_df.index, "PRED_LOG_INC"] = s1_model.predict(X_s1)
+hh["PRED_LOG_INC"] = hh["PRED_LOG_INC"].fillna(np.log1p(hh["AVG_INC_AGE"].astype(float)))  # fallback for rows outside s1
 
-# attach predicted income from stage 1 index
-s2_df = s2_df.merge(
-    s1_df[s1_feats[:1] + ["PRED_LOG_INC"]].reset_index(),
-    left_index=True, right_on="index", how="inner", suffixes=("","_s1")
-).drop(columns=["index"])
+# Stage 2: predict spend ratio using predicted income — no actual income leakage
+# Crucially, INCOME_ANNUAL / LOG_INCOME must NOT be features here (they come from actual income)
+s2_base_feats = [c for c in s1_feats if c in hh.columns]  # pure demographics
+s2_feats      = s2_base_feats + ["PRED_LOG_INC"]           # + predicted income only
 
-s2_feats = s1_feats + ["PRED_LOG_INC"]
-s2_feats = [c for c in s2_feats if c in s2_df.columns]
-X_s2     = s2_df[s2_feats].values
-y_s2     = s2_df["SPEND_RATIO"].values
+s2_df  = hh[s2_feats + ["SPEND_RATIO"]].replace([np.inf, -np.inf], np.nan).dropna()
+s2_df  = s2_df[s2_df["SPEND_RATIO"] > 0]
+X_s2   = s2_df[s2_feats].values
+y_s2   = s2_df["SPEND_RATIO"].values
 
 s2_model = GradientBoostingRegressor(n_estimators=300, max_depth=4, learning_rate=0.05, random_state=42)
 s2_r2    = cross_val_score(s2_model, X_s2, y_s2, cv=kf, scoring="r2")
 print(f"  Stage 2  Predict spend ratio  CV R2 = {s2_r2.mean():.4f} ± {s2_r2.std():.4f}")
 s2_model.fit(X_s2, y_s2)
 
-print(f"\n  Two-stage R2 gain vs baseline: "
-      f"{s2_r2.mean():.4f} vs {model_results.get('Gradient Boosting',{}).get('R2',0):.4f}")
+baseline_r2 = model_results.get("Gradient Boosting", {}).get("R2", 0)
+print(f"\n  Two-stage R2 vs single-stage baseline: {s2_r2.mean():.4f} vs {baseline_r2:.4f}"
+      f"  ({'↑ improvement' if s2_r2.mean() > baseline_r2 else '↓ no gain — income proxy is the bottleneck'})")
 
 # ── 8. VISUALISATIONS ─────────────────────────────────────────────────────────
 PALETTE = ["#2196F3","#4CAF50","#FF9800","#E91E63","#9C27B0","#00BCD4","#FF5722"]
