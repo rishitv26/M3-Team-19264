@@ -19,7 +19,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import glob, os, warnings
+import sys
+
+_f = open("output.txt", "w")
+sys.stdout = _f
+
 warnings.filterwarnings("ignore")
+
+
 
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.linear_model import LinearRegression, Ridge, ElasticNet
@@ -450,3 +457,6 @@ print("="*65)
 
 imp_df.to_csv("variable_importance_ratio.csv", index=False)
 print("  ✓ Saved: variable_importance_ratio.csv")
+
+sys.stdout = sys.__stdout__  # restore
+_f.close()
