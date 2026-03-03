@@ -1,75 +1,6 @@
 """
-GamblingLossPredictor — Experimental + Production Class
-========================================================
-Q2: Know the Spread — M3 Challenge 2026
+Q2: Know the Spread
 
-Mirrors the SpendingRatioPredictor (Q1) class structure exactly.
-
-Pipeline:
-  • load_data()        — load q2_simulation_data.csv, engineer all features
-  • run_all_models()   — Ridge, Random Forest, Gradient Boosting with 5-fold CV
-  • tune_best()        — RandomizedSearchCV on the best model
-  • plot()             — all diagnostic charts
-  • summary()          — print full results table
-  • predict()          — single individual (plain human inputs)
-  • predict_df()       — DataFrame of individuals
-  • swap_model()       — switch which trained model predict() uses
-  • save() / load()    — persist entire experiment state to disk
-  • run_all()          — one-call convenience
-
-Feature rounds (best = Round 3, all three layers):
-  Round 1 — Demographics:    age, gender, income
-  Round 2 — + Disposable DI: from Q1 model output
-  Round 3 — + Behavioral:    risk tolerance, wager intensity (log F_i)
-
-Usage
------
-    from q2_loss_predictor import GamblingLossPredictor
-
-    # ── Run full experiment ──────────────────────────────────────────
-    g = GamblingLossPredictor()
-    g.load_data()
-    g.run_all_models()
-    g.tune_best()
-    g.plot()
-    g.summary()
-    g.save("gambling_loss_model.pkl")
-
-    # ── Or run everything in one call ────────────────────────────────
-    g = GamblingLossPredictor().run_all()
-    g.save("gambling_loss_model.pkl")
-
-    # ── Load and predict ─────────────────────────────────────────────
-    g = GamblingLossPredictor.load("gambling_loss_model.pkl")
-
-    result = g.predict(
-        age=28, male=1, income=65_000,
-        disposable_income=20_000, risk_tolerance="high",
-    )
-    print(result)
-    # {'predicted_loss': 412, 'pi_low': 80, 'pi_high': 1240,
-    #  'loss_pct_di': 2.1, 'moderate_harm': False, 'severe_harm': False}
-
-    # ── Use build_features() for DataFrame predictions ───────────────
-    feats = GamblingLossPredictor.build_features(
-        age=45, male=1, income=150_000,
-        disposable_income=55_000, risk_tolerance="extreme",
-    )
-    result = g.predict(**feats)
-
-    # ── Swap to a different trained model ────────────────────────────
-    g.swap_model("Random Forest")
-    result = g.predict(age=28, male=1, income=65_000,
-                       disposable_income=20_000, risk_tolerance="medium")
-
-    # ── Predict for a DataFrame ──────────────────────────────────────
-    import pandas as pd
-    df = pd.DataFrame([
-        {"age":22,"male":1,"income":32_000,"disposable_income":9_000, "risk_tolerance":"high"},
-        {"age":55,"male":0,"income":80_000,"disposable_income":25_000,"risk_tolerance":"low"},
-    ])
-    preds = g.predict_df(df)
-    print(preds)
 """
 
 from __future__ import annotations
@@ -93,9 +24,9 @@ from sklearn.preprocessing import StandardScaler
 
 warnings.filterwarnings("ignore")
 
-# ── Constants ──────────────────────────────────────────────────────────────────
+#Constants
 
-# Round 3 feature set — demographics + disposable income + behavioral
+# Round 3 feature set - demographics + disposable income + behavioral
 ALL_FEATURES = [
     # Demographics (Round 1)
     "age", "age_sq", "male", "log_income",
@@ -133,7 +64,7 @@ FEATURE_LABELS = {
 PALETTE = ["#2196F3", "#4CAF50", "#FF9800", "#E91E63", "#9C27B0"]
 
 
-# ── Class ──────────────────────────────────────────────────────────────────────
+# Class
 
 class GamblingLossPredictor:
     """
@@ -161,8 +92,8 @@ class GamblingLossPredictor:
         self.residuals:      Optional[np.ndarray]  = None   # run_all_models()
 
         # Model results
-        self.model_results:  dict = {}   # name → {R2, R2_std, MAE}
-        self.trained_models: dict = {}   # name → fitted model object
+        self.model_results:  dict = {}   # name > {R2, R2_std, MAE}
+        self.trained_models: dict = {}   # name > fitted model object
         self.best_model_name: Optional[str] = None
 
         # Tuning
@@ -175,16 +106,14 @@ class GamblingLossPredictor:
         self._active_feats: Optional[list]   = None
         self._active_name:  Optional[str]    = None
 
-    # =========================================================================
-    # STEP 1 — Load & engineer
-    # =========================================================================
+    # STEP 1 - Load & engineer
 
     def load_data(self, verbose: bool = True) -> "GamblingLossPredictor":
         """
         Load simulation output CSV, restrict to gamblers, engineer all features.
 
         Feature engineering follows the iterative structure:
-          Round 1 (demographics):  age²,  log(income), age group dummies,
+          Round 1 (demographics):  age-squared,  log(income), age group dummies,
                                    gender×age interaction
           Round 2 (+ DI):          log(disposable_income)
           Round 3 (+ behavioral):  log(wager_frac),  risk quartile dummies
@@ -200,14 +129,14 @@ class GamblingLossPredictor:
         if verbose:
             print(f"Loaded simulation data: {len(df):,} agents")
 
-        # Restrict to gamblers — Stage 2 of two-part model (Duan et al. 1983)
+        # Restrict to gamblers - Stage 2 of two-part model (Duan et al. 1983)
         gamblers = df[df["gambles"] == 1].copy()
 
         if verbose:
             print(f"Gamblers (model population): {len(gamblers):,} "
                   f"({len(gamblers)/len(df)*100:.1f}%)")
 
-        # ── Round 1: demographics
+        # Round 1: demographics
         gamblers["age_sq"]    = gamblers["age"] ** 2
         gamblers["log_income"]= np.log(gamblers["income"].clip(lower=1))
         gamblers["age_1834"]  = ((gamblers["age"] >= 18) & (gamblers["age"] <= 34)).astype(int)
@@ -215,10 +144,10 @@ class GamblingLossPredictor:
         gamblers["age_5064"]  = ((gamblers["age"] >= 50) & (gamblers["age"] <= 64)).astype(int)
         gamblers["young_male"]= ((gamblers["age"] <= 34) & (gamblers["male"] == 1)).astype(int)
 
-        # ── Round 2: disposable income
+        # Round 2: disposable income
         gamblers["log_di"] = np.log(gamblers["disposable_income"].clip(lower=1))
 
-        # ── Round 3: behavioral — risk tolerance from wager_frac quartiles
+        # Round 3: behavioral - risk tolerance from wager_frac quartiles
         q25 = gamblers["wager_frac"].quantile(0.25)
         q50 = gamblers["wager_frac"].quantile(0.50)
         q75 = gamblers["wager_frac"].quantile(0.75)
@@ -247,9 +176,7 @@ class GamblingLossPredictor:
 
         return self
 
-    # =========================================================================
-    # STEP 2 — Train all models (3 feature rounds × 3 models)
-    # =========================================================================
+    # STEP 2 - Train all models (3 feature rounds × 3 models)
 
     def run_all_models(self, verbose: bool = True) -> "GamblingLossPredictor":
         """
@@ -275,11 +202,11 @@ class GamblingLossPredictor:
 
         # Human-readable display names
         DISPLAY = {
-            "Round1_Ridge": "Ridge — Demographics only",
-            "Round2_Ridge": "Ridge — Demo + DI",
-            "Round3_Ridge": "Ridge — Demo + DI + Behavioral",
-            "Round3_RF":    "Random Forest — All features",
-            "Round3_GBM":   "Gradient Boosting — All features",
+            "Round1_Ridge": "Ridge - Demographics only",
+            "Round2_Ridge": "Ridge - Demo + DI",
+            "Round3_Ridge": "Ridge - Demo + DI + Behavioral",
+            "Round3_RF":    "Random Forest - All features",
+            "Round3_GBM":   "Gradient Boosting - All features",
         }
 
         if verbose:
@@ -302,7 +229,7 @@ class GamblingLossPredictor:
                 print(f"  {DISPLAY[key]:<38} {r2.mean():>8.4f} "
                       f"{r2.std():>7.4f} ${mae.mean():>10,.0f}")
 
-        # Best model = highest R² among Round 3 models
+        # Best model = highest R2 among Round 3 models
         r3_models = {k: v for k, v in self.model_results.items() if "All features" in k or "Behavioral" in k}
         self.best_model_name = max(r3_models, key=lambda k: r3_models[k]["R2"])
 
@@ -324,9 +251,7 @@ class GamblingLossPredictor:
 
         return self
 
-    # =========================================================================
-    # STEP 3 — Hyperparameter tuning
-    # =========================================================================
+    # STEP 3 - Hyperparameter tuning
 
     def tune_best(self, verbose: bool = True) -> "GamblingLossPredictor":
         """Tune the best model from run_all_models() via RandomizedSearchCV."""
@@ -358,7 +283,7 @@ class GamblingLossPredictor:
             base = GradientBoostingRegressor(random_state=self.random_state)
         else:
             if verbose:
-                print(f"  No tuning grid for '{name}' — skipping.")
+                print(f"  No tuning grid for '{name}' - skipping.")
             return self
 
         tuner = RandomizedSearchCV(
@@ -393,9 +318,7 @@ class GamblingLossPredictor:
 
         return self
 
-    # =========================================================================
-    # STEP 4 — Plots
-    # =========================================================================
+    # STEP 4 - Plots
 
     def plot(self, save: bool = True) -> "GamblingLossPredictor":
         """Generate and save all diagnostic visualisation panels."""
@@ -404,7 +327,7 @@ class GamblingLossPredictor:
         fmt_d = mticker.FuncFormatter(lambda x, _: f"${x:,.0f}")
 
         fig, axes = plt.subplots(2, 3, figsize=(18, 11))
-        fig.suptitle("Q2: GamblingLossPredictor — Diagnostic Plots",
+        fig.suptitle("Q2: GamblingLossPredictor - Diagnostic Plots",
                      fontsize=15, fontweight="bold", y=1.01)
 
         # 1: Loss distribution
@@ -431,7 +354,7 @@ class GamblingLossPredictor:
         ax.yaxis.set_major_formatter(fmt_d)
         ax.tick_params(axis="x", rotation=30)
 
-        # 3: Model R² comparison
+        # 3: Model R2 comparison
         ax = axes[0, 2]
         disp   = {k: v for k, v in self.model_results.items() if v["R2"] > 0}
         names  = list(disp.keys())
@@ -439,7 +362,7 @@ class GamblingLossPredictor:
         colors = [PALETTE[2] if n == self._active_name else PALETTE[0] for n in names]
         bars   = ax.bar(range(len(names)), r2vals, color=colors, edgecolor="white")
         ax.set_xticks(range(len(names)))
-        ax.set_xticklabels([n.replace(" — ", "\n") for n in names], fontsize=7)
+        ax.set_xticklabels([n.replace(" - ", "\n") for n in names], fontsize=7)
         ax.set_title("CV R² by Model (green = active)")
         ax.set_ylabel("R²"); ax.set_ylim(0, max(r2vals) * 1.2)
         for bar, val in zip(bars, r2vals):
@@ -499,13 +422,11 @@ class GamblingLossPredictor:
         plt.tight_layout()
         if save:
             plt.savefig("q2_predictor_diagnostics.png", dpi=150, bbox_inches="tight")
-            print("  ✓ Saved: q2_predictor_diagnostics.png")
+            print("Saved: q2_predictor_diagnostics.png")
         plt.show()
         return self
 
-    # =========================================================================
     # Prediction interface
-    # =========================================================================
 
     def predict(
         self,
@@ -523,23 +444,23 @@ class GamblingLossPredictor:
         age               : Age in years (18+)
         male              : 1 = male, 0 = female
         income            : Annual gross income ($)
-        disposable_income : Annual disposable income ($) — from Q1 model output
+        disposable_income : Annual disposable income ($) - from Q1 model output
         risk_tolerance    : Betting intensity tier:
-                            "low"     — bottom quartile of wager fraction (F ≤ Q25)
-                            "medium"  — Q25 < F ≤ Q50
-                            "high"    — Q50 < F ≤ Q75
-                            "extreme" — F > Q75 (top 25% most intensive bettors)
+                            "low"     - bottom quartile of wager fraction (F ≤ Q25)
+                            "medium"  - Q25 < F ≤ Q50
+                            "high"    - Q50 < F ≤ Q75
+                            "extreme" - F > Q75 (top 25% most intensive bettors)
 
         Returns
         -------
         dict with keys:
-            predicted_loss   — point estimate of annual net loss ($)
-            pi_low           — 10th percentile of 80% prediction interval ($)
-            pi_high          — 90th percentile of 80% prediction interval ($)
-            loss_pct_di      — predicted loss as % of disposable income
-            moderate_harm    — True if predicted loss > 5% of DI
-            severe_harm      — True if predicted loss > 20% of DI
-            active_model     — name of the model used for this prediction
+            predicted_loss   - point estimate of annual net loss ($)
+            pi_low           - 10th percentile of 80% prediction interval ($)
+            pi_high          - 90th percentile of 80% prediction interval ($)
+            loss_pct_di      - predicted loss as % of disposable income
+            moderate_harm    - True if predicted loss > 5% of DI
+            severe_harm      - True if predicted loss > 20% of DI
+            active_model     - name of the model used for this prediction
         """
         self._require("_active_model")
         feats = self.build_features(
@@ -621,17 +542,15 @@ class GamblingLossPredictor:
             test_size=0.2, random_state=self.random_state)
         self.residuals = y_test.values - model.predict(X_test)
 
-        print(f"  Active model → '{name}'")
+        print(f"  Active model > '{name}'")
         return self
 
-    # =========================================================================
     # Summary, save, load, run_all
-    # =========================================================================
 
     def summary(self) -> "GamblingLossPredictor":
         """Print a complete results table."""
         print("\n" + "=" * 70)
-        print("  EXPERIMENT SUMMARY — GamblingLossPredictor")
+        print("  EXPERIMENT SUMMARY - GamblingLossPredictor")
         print("=" * 70)
         if self.model_results:
             print(f"\n  {'Model':<42} {'CV R²':>8} {'std':>7} {'MAE':>12}")
@@ -639,7 +558,7 @@ class GamblingLossPredictor:
             for name, res in sorted(self.model_results.items(),
                                     key=lambda x: -x[1]["R2"]):
                 marker = "  ◀ active" if name == self._active_name else ""
-                mae_str = f"${res['MAE']:,.0f}" if res["MAE"] > 0 else "  —"
+                mae_str = f"${res['MAE']:,.0f}" if res["MAE"] > 0 else "  -"
                 print(f"  {name:<42} {res['R2']:>8.4f} "
                       f"{res['R2_std']:>7.4f} {mae_str:>12}{marker}")
 
@@ -672,7 +591,7 @@ class GamblingLossPredictor:
         """Pickle the entire experiment state to disk."""
         with open(path, "wb") as f:
             pickle.dump(self, f)
-        print(f"  ✓ Saved → {path}")
+        print(f"  ✓ Saved > {path}")
         return self
 
     @staticmethod
@@ -681,7 +600,7 @@ class GamblingLossPredictor:
         with open(path, "rb") as f:
             obj = pickle.load(f)
         r2 = obj.model_results.get(obj._active_name, {}).get("R2", "?")
-        print(f"  ✓ Loaded ← {path}  (active: '{obj._active_name}', R²={r2})")
+        print(f"Loaded < {path}  (active: '{obj._active_name}', R²={r2})")
         return obj
 
     def run_all(self, verbose: bool = True) -> "GamblingLossPredictor":
@@ -696,9 +615,7 @@ class GamblingLossPredictor:
             .save("gambling_loss_model.pkl")
         )
 
-    # =========================================================================
     # Static helpers
-    # =========================================================================
 
     @staticmethod
     def build_features(
@@ -720,7 +637,7 @@ class GamblingLossPredictor:
         income            : Annual gross income ($)
         disposable_income : Annual disposable income ($)
         risk_tolerance    : "low" / "medium" / "high" / "extreme"
-        _quartiles        : Internal — passed automatically when called from
+        _quartiles        : Internal - passed automatically when called from
                             predict(). If calling standalone, omit this.
         """
         # Map risk tolerance to a representative log_wager_frac
@@ -797,8 +714,7 @@ class GamblingLossPredictor:
             )
 
 
-# ── CLI ────────────────────────────────────────────────────────────────────────
-
+# CLI
 if __name__ == "__main__":
 
     # ── Run full experiment
@@ -807,7 +723,7 @@ if __name__ == "__main__":
 
     # ── Single predictions across demographic profiles
     print("\n" + "="*70)
-    print("INDIVIDUAL PREDICTIONS — cross-model comparison")
+    print("INDIVIDUAL PREDICTIONS - cross-model comparison")
     print("="*70)
 
     profiles = [
@@ -829,13 +745,13 @@ if __name__ == "__main__":
             "Loss (est)":      f"${res['predicted_loss']:,.0f}",
             "80% PI":          f"[${res['pi_low']:,.0f}–${res['pi_high']:,.0f}]",
             "% of DI":         f"{res['loss_pct_di']:.1f}%",
-            "Mod. Harm":       "⚠️" if res["moderate_harm"] else "—",
-            "Severe Harm":     "🚨" if res["severe_harm"] else "—",
+            "Mod. Harm":       "⚠️" if res["moderate_harm"] else "-",
+            "Severe Harm":     "🚨" if res["severe_harm"] else "-",
         })
 
     print(pd.DataFrame(rows).set_index("Profile").to_string())
 
-    # ── Cross-model comparison for one profile
+    # Cross-model comparison for one profile
     print("\n── Cross-model comparison: Young male, $65k income, high risk ─────────")
     for model_name in g.trained_models:
         g.swap_model(model_name)
@@ -843,7 +759,7 @@ if __name__ == "__main__":
         print(f"  {model_name:<45}  loss=${r['predicted_loss']:,.0f}  "
               f"({r['loss_pct_di']:.1f}% of DI)")
 
-    # ── predict_df example
+    # predict_df example
     print("\n── predict_df example ───────────────────────────────────────────────────")
     g.swap_model(g.best_model_name + " (tuned)")
     sample = pd.DataFrame([
