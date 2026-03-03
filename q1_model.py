@@ -1,42 +1,6 @@
 """
-Usage
------
-    from spend_ratio_model import SpendingRatioPredictor
+Q1: Playing With House Money
 
-    # Run full experiment 
-    p = SpendingRatioPredictor(data_folder="intrvw20/")
-    p.load_data()
-    p.run_importance()          # Spearman + Eta² table
-    p.run_feature_scan()        # optimal N features
-    p.run_all_models()          # all models, CV R²
-    p.tune_best()               # hyperparameter tune best model
-    p.run_two_stage()           # two-stage model
-    p.plot()                    # all charts
-    p.summary()                 # final results table
-    p.save("model.pkl")
-
-    # Or run everything in one call
-    p = SpendingRatioPredictor(data_folder="intrvw20/").run_all()
-    p.save("model.pkl")
-
-    # Load and predict 
-    p = SpendingRatioPredictor.load("model.pkl")
-
-    ratio = p.predict(
-        LOG_INCOME=11.5, INCOME_X_SIZE=200000, LOG_INCOME_X_CAR=23.0,
-        CUTENURE=1, IS_OWNER=1, MORTGAGE_FLAG=1, HAS_MORTGAGE=1, NUM_CARS=2,
-    )
-
-    # Swap to a different trained model
-    p.swap_model("Gradient Boosting")
-    ratio = p.predict(...)
-
-    # Use build_features() if you only have raw inputs
-    feats = SpendingRatioPredictor.build_features(
-        annual_income=95_000, household_size=3, num_cars=2,
-        cutenure=SpendingRatioPredictor.encode_tenure("own_mortgage"),
-    )
-    ratio = p.predict(**feats)
 """
 
 from __future__ import annotations
