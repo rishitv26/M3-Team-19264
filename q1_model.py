@@ -1,25 +1,9 @@
 """
-SpendingRatioPredictor — Experimental + Production Class
-=========================================================
-Preserves the full experimental pipeline from q1_model.py:
-  • Spearman + Eta² variable importance scan
-  • RF feature-count scan (optimal N features)
-  • All 5–6 models (Linear, Ridge, ElasticNet, RF, GBM, XGBoost)
-  • Hyperparameter tuning (RandomizedSearchCV)
-  • Two-stage model (Stage1=income, Stage2=ratio|income)
-
-AND adds a clean prediction interface:
-  • predict(**features)      — single household
-  • predict_df(df)           — DataFrame of households
-  • swap_model(name)         — switch which trained model is used for prediction
-  • save() / load()          — persist entire experiment state
-  • summary()                — print results table
-
 Usage
 -----
     from spend_ratio_model import SpendingRatioPredictor
 
-    # ── Run full experiment ───────────────────────────────────────
+    # Run full experiment 
     p = SpendingRatioPredictor(data_folder="intrvw20/")
     p.load_data()
     p.run_importance()          # Spearman + Eta² table
@@ -31,11 +15,11 @@ Usage
     p.summary()                 # final results table
     p.save("model.pkl")
 
-    # ── Or run everything in one call ────────────────────────────
+    # Or run everything in one call
     p = SpendingRatioPredictor(data_folder="intrvw20/").run_all()
     p.save("model.pkl")
 
-    # ── Load and predict ─────────────────────────────────────────
+    # Load and predict 
     p = SpendingRatioPredictor.load("model.pkl")
 
     ratio = p.predict(
@@ -43,11 +27,11 @@ Usage
         CUTENURE=1, IS_OWNER=1, MORTGAGE_FLAG=1, HAS_MORTGAGE=1, NUM_CARS=2,
     )
 
-    # ── Swap to a different trained model ────────────────────────
+    # Swap to a different trained model
     p.swap_model("Gradient Boosting")
     ratio = p.predict(...)
 
-    # ── Use build_features() if you only have raw inputs ─────────
+    # Use build_features() if you only have raw inputs
     feats = SpendingRatioPredictor.build_features(
         annual_income=95_000, household_size=3, num_cars=2,
         cutenure=SpendingRatioPredictor.encode_tenure("own_mortgage"),
@@ -81,7 +65,7 @@ try:
 except ImportError:
     HAS_XGB = False
 
-# ── Constants ─────────────────────────────────────────────────────────────────
+    Constants                                                                  
 
 PREDICT_FEATURES = [
     "LOG_INCOME", "INCOME_X_SIZE", "LOG_INCOME_X_CAR",
@@ -102,8 +86,6 @@ LABELS = {"HH_ID", "AGE_GROUP", "REGION_LABEL", "TENURE_LABEL"}
 PALETTE = ["#2196F3", "#4CAF50", "#FF9800", "#E91E63", "#9C27B0", "#00BCD4", "#FF5722"]
 
 
-# ── Class ─────────────────────────────────────────────────────────────────────
-
 class SpendingRatioPredictor:
     """Full experimental pipeline + prediction interface for CEX 2020 spending ratio."""
 
@@ -123,8 +105,8 @@ class SpendingRatioPredictor:
         self.best_n:       Optional[int]           = None
         self.final_feats:  Optional[list]          = None
 
-        self.model_results:  dict = {}   # name → {R2, R2_std, RMSE}
-        self.trained_models: dict = {}   # name → fitted model object
+        self.model_results:  dict = {}   # name  -> {R2, R2_std, RMSE}
+        self.trained_models: dict = {}   # name  -> fitted model object
         self.best_model_name: Optional[str] = None
 
         self.tuned_model:  Optional[object] = None
@@ -143,9 +125,8 @@ class SpendingRatioPredictor:
         self._active_feats: Optional[list]   = None
         self._active_name:  Optional[str]    = None
 
-    # =========================================================================
     # STEP 1 — Load & engineer
-    # =========================================================================
+      
 
     def load_data(self, verbose: bool = True) -> "SpendingRatioPredictor":
         """Load FMLI CSVs, aggregate to household level, engineer all features."""
@@ -268,7 +249,7 @@ class SpendingRatioPredictor:
         hh["LOG_INCOME_X_CAR"] = hh["LOG_INCOME"] * hh["NUM_CARS"]
 
         if verbose:
-            print(f"\n── Demographic Snapshot ───────────────────────────────────────────")
+            print(f"\n   Demographic Snapshot                                            ")
             print(f"  Median age            : {hh['AGE_REF'].median():.0f}")
             print(f"  Mean household size   : {hh['NUM_RESIDENTS'].mean():.2f}")
             print(f"  Homeownership rate    : {hh['IS_OWNER'].mean()*100:.1f}%")
@@ -278,9 +259,9 @@ class SpendingRatioPredictor:
         self.hh = hh
         return self
 
-    # =========================================================================
+      
     # STEP 2 — Variable importance
-    # =========================================================================
+      
 
     def run_importance(self, verbose: bool = True) -> "SpendingRatioPredictor":
         """Compute Spearman ρ and Eta² for all candidate features vs SPEND_RATIO."""
@@ -320,7 +301,7 @@ class SpendingRatioPredictor:
         self.imp_df = pd.DataFrame(rows).sort_values("Abs_rho", ascending=False)
 
         if verbose:
-            print("\n── Spearman Importance vs Spending Ratio ────────────────────────────")
+            print("\n   Spearman Importance vs Spending Ratio                             ")
             print(f"\n  {'Column':<22} {'ρ':>10} {'|ρ|':>8} {'Eta²':>8} {'N':>7}")
             print("  " + "-" * 62)
             for _, row in self.imp_df.iterrows():
@@ -332,13 +313,10 @@ class SpendingRatioPredictor:
 
         self.imp_df.to_csv("variable_importance_ratio.csv", index=False)
         return self
-
-    # =========================================================================
-    # STEP 3 — Feature count scan
-    # =========================================================================
+      
 
     def run_feature_scan(self, max_feats: int = 25, verbose: bool = True) -> "SpendingRatioPredictor":
-        """Scan 1→N features (by importance rank) to find the optimal count via CV R²."""
+        """Scan 1 ->N features (by importance rank) to find the optimal count via CV R²."""
         self._require("imp_df")
         hh, target = self.hh, "SPEND_RATIO"
         kf = KFold(n_splits=self.cv_folds, shuffle=True, random_state=self.random_state)
@@ -349,7 +327,7 @@ class SpendingRatioPredictor:
         ]
 
         if verbose:
-            print("\n── Feature Count Scan (RF CV R²) ────────────────────────────────────")
+            print("\n   Feature Count Scan (RF CV R²)                                     ")
 
         results = []
         for n in range(1, min(len(feat_pool) + 1, max_feats + 1)):
@@ -372,13 +350,13 @@ class SpendingRatioPredictor:
         self.final_feats = feat_pool[:self.best_n]
 
         if verbose:
-            print(f"\n  Optimal: {self.best_n} features → {self.final_feats}  "
+            print(f"\n  Optimal: {self.best_n} features  -> {self.final_feats}  "
                   f"CV R²={self.scan_df['R2'].max():.4f}")
         return self
 
-    # =========================================================================
+      
     # STEP 4 — Train all models
-    # =========================================================================
+      
 
     def run_all_models(self, verbose: bool = True) -> "SpendingRatioPredictor":
         """Train and cross-validate all models on the optimal feature set."""
@@ -406,7 +384,7 @@ class SpendingRatioPredictor:
             )
 
         if verbose:
-            print(f"\n── Model Comparison ─────────────────────────────────────────────────")
+            print(f"\n   Model Comparison                                                  ")
             print(f"  Features: {self.final_feats}")
             print(f"\n  {'Model':<22} {'R2':>8} {'std':>7} {'RMSE':>10}")
             print("  " + "-" * 52)
@@ -432,9 +410,9 @@ class SpendingRatioPredictor:
                   f"R²={self.model_results[self.best_model_name]['R2']:.4f}")
         return self
 
-    # =========================================================================
+      
     # STEP 5 — Hyperparameter tuning
-    # =========================================================================
+      
 
     def tune_best(self, verbose: bool = True) -> "SpendingRatioPredictor":
         """Tune the best model from run_all_models() via RandomizedSearchCV."""
@@ -448,7 +426,7 @@ class SpendingRatioPredictor:
 
         name = self.best_model_name
         if verbose:
-            print(f"\n── Tuning: {name} ────────────────────────────────────────────────────")
+            print(f"\n   Tuning: {name}                                                     ")
 
         if "Forest" in name:
             param_dist = {
@@ -502,9 +480,9 @@ class SpendingRatioPredictor:
             print(f"  Tuned R²: {self.tuned_r2:.4f}  params: {self.tuned_params}")
         return self
 
-    # =========================================================================
+      
     # STEP 6 — Two-stage model
-    # =========================================================================
+      
 
     def run_two_stage(self, verbose: bool = True) -> "SpendingRatioPredictor":
         """
@@ -517,7 +495,7 @@ class SpendingRatioPredictor:
         kf = KFold(n_splits=self.cv_folds, shuffle=True, random_state=self.random_state)
 
         if verbose:
-            print("\n── Two-Stage Model ──────────────────────────────────────────────────")
+            print("\n   Two-Stage Model                                                   ")
 
         stage1_pool = [
             "AGE_REF", "AGE_SQUARED", "NUM_RESIDENTS", "IS_OWNER", "HAS_MORTGAGE",
@@ -571,9 +549,9 @@ class SpendingRatioPredictor:
 
         return self
 
-    # =========================================================================
+      
     # STEP 7 — Plots
-    # =========================================================================
+      
 
     def plot(self, save: bool = True) -> "SpendingRatioPredictor":
         """Generate and save all visualisation panels."""
@@ -640,13 +618,13 @@ class SpendingRatioPredictor:
         plt.tight_layout()
         if save:
             plt.savefig("cex_2020_results.png", dpi=150, bbox_inches="tight")
-            print("  ✓ Saved: cex_2020_results.png")
+            print("Saved cex_2020_results.png")
         plt.show()
         return self
 
-    # =========================================================================
+      
     # Prediction interface
-    # =========================================================================
+      
 
     def predict(
         self,
@@ -752,12 +730,12 @@ class SpendingRatioPredictor:
         self._active_name  = name
         # two_stage uses s2_feats; everything else uses final_feats
         self._active_feats = self.s2_feats if name == "two_stage" else self.final_feats
-        print(f"  Active model → '{name}'")
+        print(f"  Active model  -> '{name}'")
         return self
 
-    # =========================================================================
+      
     # Summary, save, load, run_all
-    # =========================================================================
+      
 
     def summary(self) -> "SpendingRatioPredictor":
         """Print a complete results table."""
@@ -789,7 +767,7 @@ class SpendingRatioPredictor:
         """Pickle the entire experiment state (all models, results, data) to disk."""
         with open(path, "wb") as f:
             pickle.dump(self, f)
-        print(f"  ✓ Saved → {path}")
+        print(f"  ✓ Saved  -> {path}")
         return self
 
     @staticmethod
@@ -815,9 +793,9 @@ class SpendingRatioPredictor:
             .summary()
         )
 
-    # =========================================================================
+      
     # Static helpers
-    # =========================================================================
+      
 
     @staticmethod
     def build_features(
@@ -866,7 +844,7 @@ class SpendingRatioPredictor:
             raise RuntimeError(f"Must call {step_map.get(attr, attr)} first.")
 
 
-# ── CLI ───────────────────────────────────────────────────────────────────────
+    CLI                                                                        
 
 if __name__ == "__main__":
     # Run full experiment
