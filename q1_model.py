@@ -63,9 +63,7 @@ try:
     from xgboost import XGBRegressor
     HAS_XGB = True
 except ImportError:
-    HAS_XGB = False
-
-    Constants                                                                  
+    HAS_XGB = False                                                             
 
 PREDICT_FEATURES = [
     "LOG_INCOME", "INCOME_X_SIZE", "LOG_INCOME_X_CAR",
@@ -841,10 +839,7 @@ class SpendingRatioPredictor:
             "_active_model":   "run_all_models()",
         }
         if getattr(self, attr, None) is None:
-            raise RuntimeError(f"Must call {step_map.get(attr, attr)} first.")
-
-
-    CLI                                                                        
+            raise RuntimeError(f"Must call {step_map.get(attr, attr)} first.")                                                              
 
 if __name__ == "__main__":
     # Run full experiment
