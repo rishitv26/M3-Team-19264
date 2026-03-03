@@ -1,7 +1,7 @@
-Scenario,Part. Rate (%),Mean Loss ($),P90 Loss ($),% Lose >20% DI,Top-5% Share (%)
-Baseline,22.5,215,"1,244",1.4,55.9
-Low hold (6%),22.5,278,"1,744",2.2,54.6
-High hold (10.2%),22.5,250,"1,170",1.3,54.4
-High participation,30.4,220,913,0.9,56.3
-Low inequality (σ=1.0),22.6,284,"1,876",0.9,37.3
-High inequality (σ=2.2),22.5,306,670,1.5,73.8
+Scenario,Part. Rate (%),Mean Loss ($),P90 Loss ($),% Lose >5% DI,% Lose >20% DI,Top-5% Share (%)
+Baseline,22.5,233,650,2.4,0.2,55.0
+Low hold (6%),22.5,232,722,3.0,0.2,54.0
+High hold (10.2%),22.5,231,648,2.4,0.2,53.3
+High participation,30.4,170,501,1.7,0.1,55.4
+Low inequality (σ=1.0),22.6,241,784,1.8,0.0,35.6
+High inequality (σ=2.2),22.5,225,443,2.5,0.4,73.2

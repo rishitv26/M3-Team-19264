@@ -1,0 +1,10 @@
+Round,Model,R2,R2_std,MAE
+Round 1 — Demographics,Ridge,0.032,0.004,372
+Round 1 — Demographics,Random Forest,-0.013,0.045,364
+Round 1 — Demographics,Gradient Boosting,-0.060,0.070,367
+Round 2 — + Disposable Income,Ridge,0.032,0.004,372
+Round 2 — + Disposable Income,Random Forest,-0.002,0.037,364
+Round 2 — + Disposable Income,Gradient Boosting,-0.057,0.047,368
+Round 3 — + Behavioral (Risk/Wager),Ridge,0.230,0.026,380
+Round 3 — + Behavioral (Risk/Wager),Random Forest,0.788,0.020,225
+Round 3 — + Behavioral (Risk/Wager),Gradient Boosting,0.804,0.025,225

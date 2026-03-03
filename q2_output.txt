@@ -1,0 +1,100 @@
+Loaded simulation data: 200,000 agents
+Gamblers (model population): 45,011 (22.5%)
+
+── Gambler Population Snapshot ─────────────────────────────────────
+  Mean age:               40.7
+  Male:                   71.3%
+  Mean gross income:      $113,750
+  Mean disposable income: $45,007
+  Mean net loss:          $233
+  Median net loss:        $49
+  Risk quartile F bounds: low≤0.58%  med≤1.70%  high≤5.10%  extreme>5.10%
+
+── Model Comparison (5-fold CV) ─────────────────────────────────────
+
+  Model                                        R²     std          MAE
+  ----------------------------------------------------------------------
+  Ridge — Demographics only                0.0317  0.0042 $       372
+  Ridge — Demo + DI                        0.0318  0.0045 $       372
+  Ridge — Demo + DI + Behavioral           0.2302  0.0261 $       380
+  Random Forest — All features             0.7880  0.0195 $       225
+  Gradient Boosting — All features         0.8041  0.0251 $       225
+
+  Best model: Gradient Boosting — All features  R²=0.8041
+
+── Tuning: Gradient Boosting — All features ───────────────────────────────────────────────────
+  Tuned R²: 0.8053
+  Best params: {'subsample': 0.7, 'n_estimators': 300, 'max_depth': 3, 'learning_rate': 0.05}
+  ✓ Saved: q2_predictor_diagnostics.png
+
+======================================================================
+  EXPERIMENT SUMMARY — GamblingLossPredictor
+======================================================================
+
+  Model                                         CV R²     std          MAE
+  ------------------------------------------------------------------------
+  Gradient Boosting — All features (tuned)     0.8053  0.0000            —  ◀ active
+  Gradient Boosting — All features             0.8041  0.0251         $225
+  Random Forest — All features                 0.7880  0.0195         $225
+  Ridge — Demo + DI + Behavioral               0.2302  0.0261         $380
+  Ridge — Demo + DI                            0.0318  0.0045         $372
+  Ridge — Demographics only                    0.0317  0.0042         $372
+
+  Tuned params: {'subsample': 0.7, 'n_estimators': 300, 'max_depth': 3, 'learning_rate': 0.05}
+
+  Feature importances (Gradient Boosting — All features (tuned)):
+    Wager Intensity (log F)        0.5561  █████████████████████████████████
+    Gross Income (log)             0.2469  ██████████████
+    Disposable Income (log)        0.1904  ███████████
+    Age²                           0.0027  
+    Age                            0.0021  
+    Age 35–49                      0.0006  
+    Age 18–34                      0.0004  
+    Risk: Extreme                  0.0004  
+    Age 50–64                      0.0002  
+    Gender (Male)                  0.0002  
+    Young × Male                   0.0001  
+    Risk: Medium                   0.0000  
+    Risk: High                     0.0000  
+
+  Risk tolerance tiers (wager fraction of DI):
+    low     : F ≤ 0.58%
+    medium  : 0.58% < F ≤ 1.70%
+    high    : 1.70% < F ≤ 5.10%
+    extreme : F > 5.10%
+======================================================================
+  ✓ Saved → gambling_loss_model.pkl
+  ✓ Saved → gambling_loss_model.pkl
+
+======================================================================
+INDIVIDUAL PREDICTIONS — cross-model comparison
+======================================================================
+                                              DI     Risk Loss (est)       80% PI % of DI Mod. Harm Severe Harm
+Profile                                                                                                        
+Young male, low income, high risk         $9,000     High        $62    [$0–$373]    0.7%         —           —
+Young male, median income, medium risk   $20,000   Medium        $13    [$0–$325]    0.1%         —           —
+Mid-age female, mid income, low risk     $23,000      Low         $0    [$0–$308]   -0.0%         —           —
+Mid-age male, high income, extreme risk  $55,000  Extreme       $581  [$273–$893]    1.1%         —           —
+Older male, mid income, medium risk      $25,000   Medium        $16    [$0–$328]    0.1%         —           —
+Senior female, low income, low risk      $10,000      Low         $0    [$0–$284]   -0.3%         —           —
+
+── Cross-model comparison: Young male, $65k income, high risk ─────────
+  Active model → 'Ridge — Demographics only'
+  Ridge — Demographics only                      loss=$234  (1.2% of DI)
+  Active model → 'Ridge — Demo + DI'
+  Ridge — Demo + DI                              loss=$152  (0.8% of DI)
+  Active model → 'Ridge — Demo + DI + Behavioral'
+  Ridge — Demo + DI + Behavioral                 loss=$85  (0.4% of DI)
+  Active model → 'Random Forest — All features'
+  Random Forest — All features                   loss=$83  (0.4% of DI)
+  Active model → 'Gradient Boosting — All features'
+  Gradient Boosting — All features               loss=$87  (0.4% of DI)
+  Active model → 'Gradient Boosting — All features (tuned)'
+  Gradient Boosting — All features (tuned)       loss=$106  (0.5% of DI)
+
+── predict_df example ───────────────────────────────────────────────────
+  Active model → 'Gradient Boosting — All features (tuned)'
+   age  male  income risk_tolerance  predicted_loss  loss_pct_di  moderate_harm
+0   22     1   32000           high           61.62         0.68          False
+1   38     0   72000            low            0.00        -0.02          False
+2   45     1  150000        extreme          581.40         1.06          False
