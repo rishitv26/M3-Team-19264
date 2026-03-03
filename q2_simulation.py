@@ -1,45 +1,6 @@
 """
-Q2: Know the Spread — Structural Monte Carlo Simulation
-=======================================================
-M3 Challenge 2026: The Rise of Online Gambling
+Q2: Know the Spread
 
-CITATIONS KEY (referenced inline as [Cn]):
-[C1]  AGA Commercial Gaming Revenue Tracker 2024.
-      americangaming.org/resources/commercial-gaming-revenue-tracker/
-      "Sportsbooks won at a 9.3% rate nationally" in 2024; 9.1% in 2023.
-[C2]  M3 Challenge Problem Statement 2026.
-      $15B revenue, 22% participation, 50% for men 18-49 cited directly.
-[C3]  Deng X, Clark L. et al. (2021). "Pareto distributions in online casino
-      gambling." Addictive Behaviors 119: 106916. PubMed: 34004521.
-      "Top 20% of gamblers accounted for 90% of net losses" over one year.
-[C4]  Tom M., LaPlante D., Shaffer H. (2014). "Does Pareto Rule Internet
-      Gambling?" Journal of Gambling Business and Economics 8(1):73-100.
-      "80% of spending attributed to the top 7% of gamblers" (sports betting).
-[C5]  Brosowski T. et al. (2019). "Gambling spending and its concentration on
-      problem gamblers." Journal of Behavioral Addictions. ScienceDirect.
-      GINI coefficients of 80-88% for gambling expenditure across three nations.
-[C6]  Mi X. et al. (2019). "Online Gambling of Pure Chance: Wager Distribution,
-      Risk Attitude, and Anomalous Diffusion." Scientific Reports / PMC6789128.
-      "The log-normal distribution describes the wager distribution at the
-      aggregate level" across multiple online gambling platforms.
-[C7]  Duan N. et al. (1983). "A comparison of alternative models for the demand
-      for medical care." Journal of Business & Economic Statistics 1(2):115-126.
-      Establishes the two-part / hurdle model as the standard for zero-inflated
-      positive expenditure data — directly applicable to participation + intensity.
-[C8]  U.S. Census Bureau, Current Population Survey (CPS) 2023.
-      Median household income ~$80k; lognormal approximation widely used in
-      labor economics (Mincer 1974; Attanasio & Weber 1995).
-[C9]  Bureau of Labor Statistics, Consumer Expenditure Survey (CEX) 2020-2023.
-      Essential spending shares (housing ~30%, food ~10%, transport ~15%,
-      healthcare ~7%) derived from tabulated means by income quintile.
-[C10] IRS Revenue Procedure 2023-34 (2023 tax brackets).
-      Marginal rates of 12% / 22% / 24% / 32% at respective income thresholds.
-[C11] Siena University Research Institute, Feb 2025.
-      scri.siena.edu — 22% of all Americans and ~50% of men 18-49 have active
-      online sports betting accounts. [Also cited in C2 as footnote 3.]
-[C12] Gainsbury S. et al. (2015). "How the internet is changing gambling:
-      Findings from an online survey of gamblers." International Gambling Studies.
-      Online betting increases participation among younger, male demographics.
 """
 
 import numpy as np
@@ -56,9 +17,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import cross_val_score, KFold
 from sklearn.pipeline import Pipeline
 
-# ══════════════════════════════════════════════════════════════════════
 # CONSTANTS & CALIBRATION TARGETS
-# ══════════════════════════════════════════════════════════════════════
 
 RNG_SEED = 42
 N_AGENTS = 200_000
@@ -76,7 +35,7 @@ TARGET_PART_RATE = 0.22
 # [C1] AGA Commercial Gaming Revenue Tracker 2024:
 # national hold was 9.3% in 2024 and 9.1% in 2023.
 # The problem statement's implied ~10% ($15B / $150B) aligns with this.
-# We use 9% as our baseline — central to the AGA-reported 2023-2024 range.
+# We use 9% as our baseline - central to the AGA-reported 2023-2024 range.
 HOUSE_EDGE = 0.09
 
 # [C3][C4] Top-20% of online gamblers generate ~90% of net losses (Deng et al.
@@ -88,14 +47,12 @@ TOP5_TARGET = 0.45
 
 # [C6] Mi et al. (2019) demonstrate that aggregate wager distributions across
 # online gambling platforms are well described by a lognormal distribution.
-# σ=1.6 is chosen to produce top-5% share ≈ 45% (validated in calibration).
-# [C5] GINI ~85% for gambling expenditure implies high σ in a lognormal.
+# sigma=1.6 is chosen to produce top-5% share ≈ 45% (validated in calibration).
+# [C5] GINI ~85% for gambling expenditure implies high sigma in a lognormal.
 SIGMA_F = 1.6
 
 
-# ══════════════════════════════════════════════════════════════════════
 # 1. SYNTHETIC POPULATION GENERATION
-# ══════════════════════════════════════════════════════════════════════
 
 def generate_population(n: int, seed: int = RNG_SEED) -> pd.DataFrame:
     """
@@ -103,7 +60,7 @@ def generate_population(n: int, seed: int = RNG_SEED) -> pd.DataFrame:
 
     [C8] Income drawn from Lognormal(log(75000), 0.85):
     - Lognormal income distributions are standard in labor economics (Mincer 1974).
-    - σ=0.85 calibrated to Census CPS 2023 which shows P10≈$20k, P50≈$75k, P90≈$180k.
+    - sigma=0.85 calibrated to Census CPS 2023 which shows P10≈$20k, P50≈$75k, P90≈$180k.
 
     Region weights from Census Bureau 2022 population estimates:
     NE=17%, MW=21%, S=38%, W=24%.
@@ -118,7 +75,7 @@ def generate_population(n: int, seed: int = RNG_SEED) -> pd.DataFrame:
     # higher. Gender split set at 50/50 per Census.
     male = rng.random(size=n) < 0.50
 
-    # [C8] Lognormal income: median ~$75k, σ=0.85 matches CPS 2023 percentiles.
+    # [C8] Lognormal income: median ~$75k, sigma=0.85 matches CPS 2023 percentiles.
     log_income = rng.normal(np.log(75_000), 0.85, size=n)
     income = np.exp(log_income)
     income = np.clip(income, 15_000, 1_000_000)
@@ -126,7 +83,7 @@ def generate_population(n: int, seed: int = RNG_SEED) -> pd.DataFrame:
     # Census Bureau 2022 regional shares (NE/MW/S/W)
     region = rng.choice([1, 2, 3, 4], size=n, p=[0.17, 0.21, 0.38, 0.24])
 
-    # Educational attainment: NCES 2023 — ~35% no degree, 30% some college,
+    # Educational attainment: NCES 2023 - ~35% no degree, 30% some college,
     # 35% bachelor+. Used as a covariate in the participation model.
     education = rng.choice([0, 1, 2], size=n, p=[0.35, 0.30, 0.35])
 
@@ -139,9 +96,7 @@ def generate_population(n: int, seed: int = RNG_SEED) -> pd.DataFrame:
     })
 
 
-# ══════════════════════════════════════════════════════════════════════
 # 2. DISPOSABLE INCOME (Q1 structural model)
-# ══════════════════════════════════════════════════════════════════════
 
 def compute_disposable_income(pop: pd.DataFrame) -> np.ndarray:
     """
@@ -183,9 +138,7 @@ def compute_disposable_income(pop: pd.DataFrame) -> np.ndarray:
     return np.maximum(di, 0)
 
 
-# ══════════════════════════════════════════════════════════════════════
-# 3. PARTICIPATION MODEL  Gamble_i ~ Bernoulli(σ(X_i β))
-# ══════════════════════════════════════════════════════════════════════
+# 3. PARTICIPATION MODEL
 # [C7] Two-part / hurdle model: Duan et al. (1983) establish the logistic
 # participation equation as the canonical first stage for zero-inflated
 # expenditure data. Identical structure used in health insurance demand
@@ -206,7 +159,7 @@ BETA = {
     "age_1849":    0.60,   # [C11][C12] prime gambling demographic premium
     "age_5064":   -0.30,   # [C12] participation declines moderately 50-64
     "age_65p":    -0.90,   # [C12] further reduction 65+; lower online adoption
-    "log_income":  0.15,   # [C12] slight positive effect; higher DI → more leisure
+    "log_income":  0.15,   # [C12] slight positive effect; higher DI > more leisure
     "educ_low":    0.10,   # marginally higher participation for those without degrees
                            # consistent with problem gambling literature (Brosowski et al. 2019 [C5])
 }
@@ -216,7 +169,7 @@ def compute_participation_prob(pop: pd.DataFrame) -> np.ndarray:
     age = pop["age"].values
     inc = pop["income"].values
 
-    # Age group dummies — piecewise to allow non-linear age profile [C12]
+    # Age group dummies - piecewise to allow non-linear age profile [C12]
     age_1849 = ((age >= 18) & (age <= 49)).astype(float)
     age_5064 = ((age >= 50) & (age <= 64)).astype(float)
     age_65p  = (age >= 65).astype(float)
@@ -232,9 +185,7 @@ def compute_participation_prob(pop: pd.DataFrame) -> np.ndarray:
     return logistic(lin)
 
 
-# ══════════════════════════════════════════════════════════════════════
-# 4. CALIBRATE μ_F — solve for lognormal location parameter
-# ══════════════════════════════════════════════════════════════════════
+# 4. CALIBRATE μ_F - solve for lognormal location parameter
 
 def calibrate_mu_f(pop, di, p_gamble, sigma_f, house_edge,
                    revenue_target, n_agents):
@@ -260,15 +211,13 @@ def calibrate_mu_f(pop, di, p_gamble, sigma_f, house_edge,
     # Implied E[F]: fraction of DI the average participating gambler wagers
     e_f_required = target_per_person / (house_edge * mean_di * mean_p)
 
-    # Invert lognormal mean: E[F] = exp(μ + σ²/2)
+    # Invert lognormal mean
     mu_f = np.log(e_f_required) - (sigma_f ** 2) / 2
 
     return mu_f
 
 
-# ══════════════════════════════════════════════════════════════════════
 # 5. FULL SIMULATION
-# ══════════════════════════════════════════════════════════════════════
 
 def run_simulation(
     n: int            = N_AGENTS,
@@ -283,17 +232,6 @@ def run_simulation(
     Structural equation:
         Loss_i = h · DI_i · F_i · 1{Gamble_i=1}
 
-    Structural equation (extended):
-        log(F_i) = μ_F + β_age·age_i + β_income·log(income_i) + β_male·male_i + σ_F·ε_i
-
-    This demographic-adjusted lognormal means conditional betting intensity
-    varies by age, income, and gender — producing realistic variation in
-    loss/DI ratios across demographic groups (Braverman & Shaffer 2012;
-    Gainsbury et al. 2015 [C12]; Brosowski et al. 2019 [C5]).
-
-    Outcome noise: ε_i ~ N(0, (√wager_i × 8)²)
-    Uses sqrt scaling to reflect law-of-large-numbers attenuation for
-    frequent annual bettors (Croson & Sundali 2005, J. Risk & Uncertainty).
     """
     rng = np.random.default_rng(seed)
 
@@ -315,7 +253,7 @@ def run_simulation(
     # [C7] Stage 1: participation draw
     gamble = (rng.random(size=n) < p_gamble).astype(int)
 
-    # [C6] Stage 2: wager intensity — demographic-adjusted lognormal
+    # [C6] Stage 2: wager intensity - demographic-adjusted lognormal
     #
     # Core insight: conditional on gambling, intensity (F = wager/DI) varies
     # by demographics. A homogeneous F produces identical loss/DI distributions
@@ -340,9 +278,9 @@ def run_simulation(
     # (LaPlante et al. 2009, Addiction; Gainsbury et al. 2015 [C12]).
     # Adjustment of +0.20 for males.
 
-    age_adj_f    = -0.015 * np.maximum(pop["age"].values - 25, 0)   # younger → higher F
-    income_adj_f = -0.12  * np.log(pop["income"].values / 75_000)    # lower income → higher F
-    gender_adj_f =  0.20  * pop["male"].values                       # male → higher F
+    age_adj_f    = -0.015 * np.maximum(pop["age"].values - 25, 0)   # younger > higher F
+    income_adj_f = -0.12  * np.log(pop["income"].values / 75_000)    # lower income > higher F
+    gender_adj_f =  0.20  * pop["male"].values                       # male > higher F
 
     # mu_f is the population mean; individual deviations are demographic shifts
     mu_f_i = mu_f + age_adj_f + income_adj_f + gender_adj_f
@@ -417,9 +355,7 @@ def run_simulation(
     return pop
 
 
-# ══════════════════════════════════════════════════════════════════════
 # 6. SINGLE-INDIVIDUAL PREDICTION FUNCTION
-# ══════════════════════════════════════════════════════════════════════
 
 def predict_individual(
     age: float,
@@ -448,7 +384,7 @@ def predict_individual(
     di = compute_disposable_income(row)[0]
     p  = compute_participation_prob(row)[0]
 
-    # Calibrate μ_F from a representative population
+    # Calibrate mu_F from a representative population
     pop_cal = generate_population(50_000, seed=seed+1)
     di_cal  = compute_disposable_income(pop_cal)
     p_cal   = compute_participation_prob(pop_cal)
@@ -485,16 +421,13 @@ def predict_individual(
     }
 
 
-# ══════════════════════════════════════════════════════════════════════
 # 7. SENSITIVITY ANALYSIS
-# ══════════════════════════════════════════════════════════════════════
 
 def sensitivity_analysis(base_pop: pd.DataFrame) -> pd.DataFrame:
     """
     Vary three key parameters:
       - House edge h: [C1] AGA reports range of 6-10% across states/quarters.
       - Participation shift: captures uncertainty around [C11] 22% baseline.
-      - σ_F (inequality): [C5] GINI of 80-88% suggests σ in range 1.0-2.2.
 
     Reported metrics:
       - Mean/P90 loss: standard distributional summary
@@ -539,7 +472,7 @@ def sensitivity_analysis(base_pop: pd.DataFrame) -> pd.DataFrame:
         nl_g   = net_loss[g_mask]
         di_g   = di[g_mask]
 
-        # Use expected loss for concentration metric — same reason as main sim [C3][C4]
+        # Use expected loss for concentration metric - same reason as main sim [C3][C4]
         exp_g      = losses[g_mask]
         sorted_exp = np.sort(exp_g)[::-1]
         top5_share = (sorted_exp[:int(0.05*len(sorted_exp))].sum()
@@ -558,9 +491,7 @@ def sensitivity_analysis(base_pop: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(results).set_index("Scenario")
 
 
-# ══════════════════════════════════════════════════════════════════════
 # 8. VISUALISATIONS
-# ══════════════════════════════════════════════════════════════════════
 
 def plot_results(pop: pd.DataFrame, save_prefix: str = "q2"):
     fmt_d = mticker.FuncFormatter(lambda x, _: f"${x:,.0f}")
@@ -571,7 +502,7 @@ def plot_results(pop: pd.DataFrame, save_prefix: str = "q2"):
     fig.suptitle("Q2: Individual Gambling Loss Distribution (Monte Carlo Simulation)",
                  fontsize=14, fontweight="bold")
 
-    # 1a: Net loss on LOG scale — reveals the heavy tail structure [C3][C5]
+    # 1a: Net loss on LOG scale - reveals the heavy tail structure [C3][C5]
     # Linear scale compresses everything to a spike; log scale shows the full
     # Pareto tail that is the key empirical feature of gambling loss distributions.
     ax = axes[0, 0]
@@ -583,7 +514,7 @@ def plot_results(pop: pd.DataFrame, save_prefix: str = "q2"):
                linestyle="-.", label=f"Median loss: ${pos_losses.median():,.0f}")
     ax.axvline(pos_losses.quantile(0.95), color="red", linewidth=1.5,
                linestyle="--", label=f"95th pct: ${pos_losses.quantile(0.95):,.0f}")
-    ax.set_title("Net Loss Distribution — Log Scale (Losers Only)")
+    ax.set_title("Net Loss Distribution - Log Scale (Losers Only)")
     ax.set_xlabel("Annual Net Loss ($, log scale)"); ax.set_ylabel("Count")
     ax.xaxis.set_major_formatter(fmt_d); ax.legend(fontsize=9)
 
@@ -597,7 +528,7 @@ def plot_results(pop: pd.DataFrame, save_prefix: str = "q2"):
 
     # 1c: Loss as % of DI by income tier [C8][C9]
     # Absolute loss rises with income (richer people bet more dollars).
-    # % of DI reverses this — showing lower-income gamblers face proportionally
+    # % of DI reverses this - showing lower-income gamblers face proportionally
     # greater financial harm. [C5] Brosowski et al. (2019): lower-income groups
     # spend a higher share of resources on gambling.
     ax = axes[1, 0]
@@ -616,9 +547,9 @@ def plot_results(pop: pd.DataFrame, save_prefix: str = "q2"):
     ax.hist(pct, bins=60, color="mediumpurple", edgecolor="white", alpha=0.85)
     ax.axvline(0,  color="gray",   linewidth=1,   linestyle="--", label="Break even")
     ax.axvline(5,  color="gold",   linewidth=1.5, linestyle="-.",
-               label=f"5% DI — moderate harm ({(gamblers['loss_pct_di'] > 5).mean()*100:.1f}%)")
+               label=f"5% DI - moderate harm ({(gamblers['loss_pct_di'] > 5).mean()*100:.1f}%)")
     ax.axvline(20, color="red",    linewidth=1.5, linestyle="-.",
-               label=f"20% DI — severe harm ({(gamblers['loss_pct_di'] > 20).mean()*100:.1f}%)")
+               label=f"20% DI - severe harm ({(gamblers['loss_pct_di'] > 20).mean()*100:.1f}%)")
     ax.set_title("Loss as % of Disposable Income (Gamblers)")
     ax.set_xlabel("Net Loss / Disposable Income (%)"); ax.set_ylabel("Count")
     ax.legend(fontsize=8)
@@ -636,7 +567,7 @@ def plot_results(pop: pd.DataFrame, save_prefix: str = "q2"):
     ax = axes[0]
     gamblers.groupby("income_tier", observed=True)["net_loss"].mean().plot(
         kind="bar", ax=ax, color="steelblue", edgecolor="white", width=0.7)
-    ax.set_title("Mean Annual Loss — Absolute ($)"); ax.set_xlabel("")
+    ax.set_title("Mean Annual Loss - Absolute ($)"); ax.set_xlabel("")
     ax.set_ylabel("Mean Net Loss ($)"); ax.yaxis.set_major_formatter(fmt_d)
     ax.tick_params(axis="x", rotation=20)
     ax.annotate("Higher income -> more dollars lost (but not necessarily more harmed)",
@@ -687,7 +618,7 @@ def plot_results(pop: pd.DataFrame, save_prefix: str = "q2"):
     plt.close()
     print(f"Saved: {save_prefix}_participation.png")
 
-    # ── Figure 3: Lorenz curve — loss concentration [C3][C4][C5]
+    # ── Figure 3: Lorenz curve - loss concentration [C3][C4][C5]
     fig, ax = plt.subplots(figsize=(7, 6))
     losses_pos = gamblers["net_loss"].clip(lower=0).sort_values()
     cum_pop  = np.linspace(0, 1, len(losses_pos))
@@ -698,7 +629,7 @@ def plot_results(pop: pd.DataFrame, save_prefix: str = "q2"):
     ax.fill_between(cum_pop, cum_loss, cum_pop, alpha=0.15, color="steelblue")
     ax.axvline(0.95, color="orange", linestyle=":", linewidth=1.5)
     top5_y = cum_loss[int(0.95*len(cum_loss))]
-    ax.annotate(f"Top 5% → {(1-top5_y)*100:.0f}% of losses\n[Tom et al. 2014: top 7% → 80%]",
+    ax.annotate(f"Top 5% > {(1-top5_y)*100:.0f}% of losses\n[Tom et al. 2014: top 7% > 80%]",
                 xy=(0.95, top5_y), xytext=(0.62, 0.22),
                 arrowprops=dict(arrowstyle="->", color="orange"),
                 fontsize=9, color="darkorange")
@@ -737,9 +668,7 @@ def plot_results(pop: pd.DataFrame, save_prefix: str = "q2"):
     print(f"Saved: {save_prefix}_heatmap.png")
 
 
-# ══════════════════════════════════════════════════════════════════════
 # 9. DEMOGRAPHIC DEMONSTRATION TABLE
-# ══════════════════════════════════════════════════════════════════════
 
 def demo_individuals():
     """
@@ -777,12 +706,10 @@ def demo_individuals():
     return df
 
 
-# ══════════════════════════════════════════════════════════════════════
 # MAIN
-# ══════════════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
-    print("Q2: Know the Spread — Structural Monte Carlo Simulation")
+    print("Q2: Know the Spread - Structural Monte Carlo Simulation")
     print("Calibrated to: AGA hold [C1] | Siena participation [C11] | Pareto concentration [C3][C4]")
     print("=" * 65)
 
@@ -811,10 +738,10 @@ if __name__ == "__main__":
     print("Saved: q2_simulation_data.csv")
 
     print("\n✓ Q2 complete.")
-    print("   q2_overview.png         — 4-panel: log-scale loss dist, age, income %DI, harm thresholds")
-    print("   q2_income_harm.png      — absolute vs %DI loss by income tier (the key policy chart)")
-    print("   q2_participation.png    — participation by age/gender/income")
-    print("   q2_lorenz.png           — loss concentration curve")
-    print("   q2_heatmap.png          — age × gender loss heatmap")
-    print("   q2_sensitivity.csv      — parameter sensitivity table")
-    print("   q2_simulation_data.csv  — full simulation output")
+    print("   q2_overview.png         - 4-panel: log-scale loss dist, age, income %DI, harm thresholds")
+    print("   q2_income_harm.png      - absolute vs %DI loss by income tier (the key policy chart)")
+    print("   q2_participation.png    - participation by age/gender/income")
+    print("   q2_lorenz.png           - loss concentration curve")
+    print("   q2_heatmap.png          - age × gender loss heatmap")
+    print("   q2_sensitivity.csv      - parameter sensitivity table")
+    print("   q2_simulation_data.csv  - full simulation output")
